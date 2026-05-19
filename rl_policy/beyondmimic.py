@@ -35,21 +35,7 @@ class BeyondMimicPolicy:
         model_path: str,
         rl_rate: int = 50,
     ) -> None:
-        robot_type = robot_config["ROBOT_TYPE"]
-        if robot_type == "g1_real":
-            # example: sys.path.append("/home/unitree/User/unitree_sdk2/build/lib")
-            sys.path.append("/path/to/your/unitree_sdk2/build/lib")
-            import g1_interface
-            network_interface = robot_config.get("INTERFACE", None)
-            self.robot = g1_interface.G1Interface(network_interface)
-            try:
-                self.robot.set_control_mode(g1_interface.ControlMode.PR)
-            except Exception:
-                pass  # Ignore if firmware already in the correct mode
-            robot_config["robot"] = self.robot
-        # Plug-in our custom state processor & command sender
-        self.state_processor = StateProcessor(robot_config, policy_config["isaac_joint_names"])
-        self.command_sender = CommandSender(robot_config, policy_config)
+        
 
         self.rl_dt = 1.0 / rl_rate
         self.t = 0
@@ -57,8 +43,29 @@ class BeyondMimicPolicy:
         self.policy_config = policy_config
 
         self.setup_policy(model_path)
+        self.set_configs()
+
         self.obs_cfg = policy_config["observation"]
 
+        
+        # Keypress control state
+        self.use_policy_action = False
+
+        self.first_time_init = True
+        self.init_count = 0
+        self.get_ready_state = False
+
+        # Setup observations after all processors are ready
+        self.setup_observations()
+
+        # Initialize variables
+        self.exp_config = exp_config
+        self.task_type = exp_config['type']
+        self.start_motion = False
+        logger.info(f"task_type={self.task_type}")
+
+    
+    def set_configs(self):
         self.isaac_joint_names = policy_config["isaac_joint_names"]
         self.num_dofs = len(self.isaac_joint_names)
 
@@ -93,14 +100,7 @@ class BeyondMimicPolicy:
             for name in self.policy_joint_names
         ]
 
-        # Keypress control state
-        self.use_policy_action = False
-
-        self.first_time_init = True
-        self.init_count = 0
-        self.get_ready_state = False
-
-        # Joint limits
+         # Joint limits
         joint_indices, joint_names, joint_pos_lower_limit = (
             resolve_matching_names_values(
                 robot_config["joint_pos_lower_limit"],
@@ -122,127 +122,6 @@ class BeyondMimicPolicy:
         )
         self.joint_pos_upper_limit = np.zeros(self.num_dofs)
         self.joint_pos_upper_limit[joint_indices] = joint_pos_upper_limit
-
-        # ------------------------------------------------------
-        # Joystick / keyboard setup (mirrors base_policy logic)
-        # ------------------------------------------------------
-        if robot_config.get("USE_JOYSTICK", False):
-            print("Using joystick")
-            self.use_joystick = True
-            self.wc_msg = None  # type: ignore
-            self.last_wc_msg = self.robot.read_wireless_controller()
-            print("Wireless Controller Initialized")
-        else:
-            import threading
-            print("Using keyboard")
-            self.use_joystick = False
-            self.key_listener_thread = threading.Thread(
-                target=self.start_key_listener, daemon=True
-            )
-            self.key_listener_thread.start()
-
-        # Setup observations after all processors are ready
-        self.setup_observations()
-
-        # Initialize variables
-        self.exp_config = exp_config
-        self.task_type = exp_config['type']
-        self.start_motion = False
-        logger.info(f"task_type={self.task_type}")
-
-        # Task-specific setup
-        if self.task_type == "tracking":
-            import joblib
-            logger.info(f"Loading tracking context from {exp_config['ctx_path']}")
-            ctx_path = Path(model_path).parent / exp_config['ctx_path']
-            self.ctx = joblib.load(ctx_path)
-            
-            logger.info(f"t_start={exp_config['start']}, t_end={exp_config['end']}, t_stop={exp_config['stop']}")
-            self.t_start = exp_config['start']
-            self.t_end = exp_config['end']
-            self.t_stop = exp_config['stop']
-
-            logger.info(f"gamma={exp_config['gamma']}, window_size={exp_config['window_size']}")
-            self.gamma = exp_config['gamma']  # discount factor
-            self.window_size = exp_config['window_size']  # context window size
-
-        elif self.task_type == "reward":
-            self.z_index = 0
-            with open(Path(model_path).parent.parent / "reward_inference" / exp_config['ctx_path'], "rb") as f:
-                self.z_dict = pickle.load(f)
-                self.z_dict_raw = copy.deepcopy(self.z_dict)
-                logger.info(colored(f"\n\nAvailable z_dict={list(self.z_dict_raw.keys())}", "green"))
-            
-            if "selected_rewards_filter_z" in exp_config:
-                selected_rewards_filter_z = exp_config['selected_rewards_filter_z'] 
-                logger.info(colored(f"\nSelected_rewards_filter_z read from config: {selected_rewards_filter_z}", "green"))
-            else:
-                raise ValueError("For task_type=reward-multiple-z-selection, selected_rewards_filter_z must be provided in the config file")
-            
-            self.z_dict = {}
-            self.selected_z_names = []
-            
-            # Iterate in the order of selected_rewards_filter_z
-            if isinstance(selected_rewards_filter_z, list):
-                for dct in selected_rewards_filter_z:
-                    k = dct['reward']
-                    selected_z_ids = dct['z_ids']
-                    if k in self.z_dict_raw:
-                        v = self.z_dict_raw[k]
-                        self.z_dict[k] = []
-                        for z_id in selected_z_ids:
-                            if z_id < len(v):
-                                self.z_dict[k].append(v[z_id])
-                                self.selected_z_names.append(f"""Reward="{k}"__Z_id={z_id}""")
-                                logger.info(f"""Added Reward="{k}"__Z_id={z_id} to self.z_dict""")
-            elif isinstance(selected_rewards_filter_z, dict):
-                for k in selected_rewards_filter_z.keys():
-                    if k in self.z_dict_raw:
-                        v = self.z_dict_raw[k]
-                        self.z_dict[k] = []
-                        for z_id in selected_rewards_filter_z[k]:
-                            if z_id < len(v):
-                                self.z_dict[k].append(v[z_id])
-                                self.selected_z_names.append(f"""Reward="{k}"__Z_id={z_id}""")
-                                logger.info(f"""Added Reward="{k}"__Z_id={z_id} to self.z_dict""")
-            
-            logger.info(colored(f"\n\nValid z_dict contains: {list(self.z_dict.keys())}", "blue"))
-            if len(self.z_dict) == 0:
-                raise ValueError("After filtering, self.z_dict is empty. Please check your selected_rewards_filter_z and available z_dict")
-            self.num_selected_rewards = len(self.z_dict.keys())
-            self.num_selected_z = len(self.selected_z_names)
-            self.selected_z = np.concatenate([val for val in self.z_dict.values()], axis=0)
-            
-            logger.info(f"self.num_selected_z={self.num_selected_z}, self.selected_z.shape={self.selected_z.shape}")
-            if self.num_selected_rewards == 1:
-                logger.info(colored(f"Only one reward is selected, make sure that is what you want", "red"))
-
-        # new goal reaching code
-        elif self.task_type == "goal":
-            self.z_index = 0
-            goal_path =Path(model_path).parent.parent / "goal_inference" / exp_config['ctx_path']
-            print(f"goal_path=\n{goal_path}")
-            with open(goal_path, "rb") as f:
-                # self.z_dict = pickle.load(f)
-                import joblib
-                self.z_dict = joblib.load(f)
-                self.z_dict_raw = copy.deepcopy(self.z_dict)
-                logger.info(colored(f"\n\nAvailable z_dict={list(self.z_dict_raw.keys())}", "green"))
-            if "selected_goals" in exp_config:
-               selected_goals = exp_config['selected_goals'] 
-               logger.info(colored(f"\nSelected_goals read from config: {selected_goals}", "green"))
-            else:
-                selected_goals = self.z_dict.keys()
-            self.z_dict = {
-                k: self.z_dict[k] for k in selected_goals if k in self.z_dict
-            }
-
-            logger.info(colored(f"\n\nValid z_dict contains: {list(self.z_dict.keys())} (Total = {len(self.z_dict)})", "blue"))
-
-            self.num_selected_goals = len(self.z_dict.keys())
-            if self.num_selected_goals ==1:
-                logger.info(colored(f"Only one goal is selected, make sure that is what you want", "red"))
-
 
     def setup_policy(self, model_path):
         # load onnx policy
@@ -391,6 +270,88 @@ class BeyondMimicPolicy:
             logger.warning(f"RL step took {elapsed:.6f} seconds, expected {self.rl_dt} seconds")
 
 
+
+        
+
+if __name__ == "__main__":
+    import argparse
+    import yaml
+    parser = argparse.ArgumentParser(description="Robot")
+    parser.add_argument(
+        "--robot_config", type=str, default="config/robot/g1.yaml", help="robot config file"
+    )
+    parser.add_argument(
+        "--policy_config", type=str, help="policy config file"
+    )
+    parser.add_argument(
+        "--model_path", type=str, help="model path"
+    )
+    parser.add_argument(
+        "--task", type=str, help="task type: tracking or reward or single or stiching", default="track-walk"
+    )
+
+    args = parser.parse_args()
+
+    with open(args.policy_config) as file:
+        policy_config = yaml.load(file, Loader=yaml.FullLoader)
+    
+    with open(args.robot_config) as file:
+        robot_config = yaml.load(file, Loader=yaml.FullLoader)
+
+    with open(args.task, 'r') as file:
+        exp_config = yaml.load(file, Loader=yaml.FullLoader)
+    model_path = args.model_path
+
+    policy = BFMZeroPolicy(
+        robot_config=robot_config,
+        policy_config=policy_config,
+        model_path=model_path,
+        exp_config=exp_config,
+        rl_rate=50,
+    )
+    policy.run()
+
+
+class Node:
+
+    def __init__(self):
+        
+        robot_type = robot_config["ROBOT_TYPE"]
+        if robot_type == "g1_real":
+            # example: sys.path.append("/home/unitree/User/unitree_sdk2/build/lib")
+            sys.path.append("/path/to/your/unitree_sdk2/build/lib")
+            import g1_interface
+            network_interface = robot_config.get("INTERFACE", None)
+            self.robot = g1_interface.G1Interface(network_interface)
+            try:
+                self.robot.set_control_mode(g1_interface.ControlMode.PR)
+            except Exception:
+                pass  # Ignore if firmware already in the correct mode
+            robot_config["robot"] = self.robot
+
+        # ------------------------------------------------------
+        # Joystick / keyboard setup (mirrors base_policy logic)
+        # ------------------------------------------------------
+        if robot_config.get("USE_JOYSTICK", False):
+            print("Using joystick")
+            self.use_joystick = True
+            self.wc_msg = None  # type: ignore
+            self.last_wc_msg = self.robot.read_wireless_controller()
+            print("Wireless Controller Initialized")
+        else:
+            import threading
+            print("Using keyboard")
+            self.use_joystick = False
+            self.key_listener_thread = threading.Thread(
+                target=self.start_key_listener, daemon=True
+            )
+            self.key_listener_thread.start()
+
+        # Plug-in our custom state processor & command sender
+        self.state_processor = StateProcessor(robot_config, policy_config["isaac_joint_names"])
+        self.command_sender = CommandSender(robot_config, policy_config)
+
+
     def process_joystick_input(self):
         """Poll current wireless controller state and translate to high-level key events."""
         try:
@@ -476,6 +437,7 @@ class BeyondMimicPolicy:
         if cur_key in ["Y+left", "Y+right", "A+left", "A+right"]:
             logger.info(colored(f"Debug kp level: {self.command_sender.kp_level}", "green"))
 
+
     # ----------------------------- Keyboard handling -----------------------------
     def start_key_listener(self):
         """Start a key listener using sshkeyboard (same as BasePolicy)."""
@@ -489,6 +451,7 @@ class BeyondMimicPolicy:
         listener = listen_keyboard(on_press=on_press)
         listener.start()
         listener.join()
+
 
     def handle_keyboard_button(self, keycode):
         if keycode == "]":
@@ -584,42 +547,4 @@ class BeyondMimicPolicy:
                 self.command_sender.robot_kp[i] = self.robot.MOTOR_KP[i] * self.command_sender.kp_level
             logger.info(colored(f"Debug kp level: {self.command_sender.kp_level}", "green"))
             logger.info(colored(f"Debug kp: {self.command_sender.robot_kp}", "green"))
-        
-
-if __name__ == "__main__":
-    import argparse
-    import yaml
-    parser = argparse.ArgumentParser(description="Robot")
-    parser.add_argument(
-        "--robot_config", type=str, default="config/robot/g1.yaml", help="robot config file"
-    )
-    parser.add_argument(
-        "--policy_config", type=str, help="policy config file"
-    )
-    parser.add_argument(
-        "--model_path", type=str, help="model path"
-    )
-    parser.add_argument(
-        "--task", type=str, help="task type: tracking or reward or single or stiching", default="track-walk"
-    )
-
-    args = parser.parse_args()
-
-    with open(args.policy_config) as file:
-        policy_config = yaml.load(file, Loader=yaml.FullLoader)
     
-    with open(args.robot_config) as file:
-        robot_config = yaml.load(file, Loader=yaml.FullLoader)
-
-    with open(args.task, 'r') as file:
-        exp_config = yaml.load(file, Loader=yaml.FullLoader)
-    model_path = args.model_path
-
-    policy = BFMZeroPolicy(
-        robot_config=robot_config,
-        policy_config=policy_config,
-        model_path=model_path,
-        exp_config=exp_config,
-        rl_rate=50,
-    )
-    policy.run()
