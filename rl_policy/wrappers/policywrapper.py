@@ -21,6 +21,9 @@ class ActionManager:
 
     def pos_clip(self, pos_val: torch.Tensor):
         return torch.clip(pos_val, self.pos_lim_l, self.pos_lim_h)
+    
+    def scale_and_add(self, raw_act, default_joint_pos):
+        return raw_act*self.act_scale + default_joint_pos
 
 
 
@@ -101,6 +104,13 @@ class PolicyWrapper:
         return obs_dict, obs
 
     def __call__(self):
-
-
-        pass
+        obs_d, obs = self.prepare_obs_for_rl()
+        raw_action = self.policy(obs)
+        self.last_action = raw_action[:]
+        action = self.process_action(raw_action)
+        return action
+    
+    def process_action(self, raw_act):
+        return self.action_manager.scale_and_add(
+            raw_act, self.default_dof_angles
+        )
