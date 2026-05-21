@@ -1,8 +1,28 @@
-def 
+from rl_policy.wrappers import get_policy_wrappper
+from interface import build_interface
+class Node:
+    def __init__(self, robot_conf, policy_conf):
+        self.robot = build_interface(robot_conf)
+        self.policy = get_policy_wrappper(policy_conf)
+        
+    def run(self):
+        try:
+            scheduler = sched.scheduler(time.perf_counter, time.sleep)
+            next_run_time = time.perf_counter()
+            
+            while True:
+                scheduler.enterabs(next_run_time, 1, self._rl_step_scheduled, ())
+                scheduler.run()
+                
+                next_run_time += self.rl_dt
+                self.total_inference_cnt += 1
 
+                if self.total_inference_cnt % 100 == 0:
+                    self.perf_dict = {}
 
+    def _rl_step_scheduled(self):
 
-
+        self.robot.lowstate
 
 
 
