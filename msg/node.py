@@ -1,210 +1,33 @@
-from rl_policy.utils.state_processor import StateProcessor
-from rl_policy.utils.command_sender import CommandSender
+import sched
+import time
+import threading
+from sshkeyboard import listen_keyboard
+from loguru import logger
+from termcolor import colored
 
-class ZMQInterface:
+from g1_deploy.rl_policy.wrappers import get_policy_wrappper
+from .zmq.interface import build_interface
 
-    def __init__(self, robot_config):
-        
-        self.robot_config = robot_config
-        robot_type = robot_config["ROBOT_TYPE"]
-        if robot_type == "g1_real":
-            # example: sys.path.append("/home/unitree/User/unitree_sdk2/build/lib")
-            sys.path.append("/path/to/your/unitree_sdk2/build/lib")
-            import g1_interface
-            network_interface = robot_config.get("INTERFACE", None)
-            self.robot = g1_interface.G1Interface(network_interface)
-            try:
-                self.robot.set_control_mode(g1_interface.ControlMode.PR)
-            except Exception:
-                pass  # Ignore if firmware already in the correct mode
-            robot_config["robot"] = self.robot
-
-    def init_low_cmd(self):
-        # init low cmd publisher
-        if self.robot_type != "g1_real":
-            self.zmq_context = zmq.Context.instance()
-            self.low_cmd_port = robot_config.get(
-                "LOW_CMD_PORT", PORTS.get("low_cmd", 55901)
-            )
-            bind_addr = robot_config.get("LOW_CMD_BIND_ADDR", "*")
-            bind_endpoint = f"tcp://{bind_addr}:{self.low_cmd_port}"
-
-            self.lowcmd_socket: zmq.Socket = self.zmq_context.socket(zmq.PUB)
-            self.lowcmd_socket.setsockopt(zmq.SNDHWM, 1)
-            self.lowcmd_socket.setsockopt(zmq.LINGER, 0)
-            self.lowcmd_socket.bind(bind_endpoint)
-            # Give subscribers time to connect before sending commands
-            time.sleep(0.1)
-        else:
-            self.lowcmd_socket = None
-
-        self.InitLowCmd()
-
-
-    def init_low_state(self):
-        self.robot_type = robot_config["ROBOT_TYPE"]
-        self.mocap_ip = robot_config.get("MOCAP_IP", "localhost")
-        # Initialize state source
-        if self.robot_type == "g1_real":
-            self.robot = robot_config["robot"]
-        else:
-            supported_types = {
-                "h1",
-                "go2",
-                "g1_29dof",
-                "h1-2_27dof",
-                "h1-2_21dof",
-            }
-            if self.robot_type not in supported_types:
-                raise NotImplementedError(
-                    f"Robot type {self.robot_type} is not supported"
-                )
-
-            self.low_state_port = robot_config.get(
-                "LOW_STATE_PORT", PORTS.get("low_state", 55900)
-            )
-            state_host = robot_config.get("LOW_STATE_HOST", "127.0.0.1")
-            state_endpoint = f"tcp://{state_host}:{self.low_state_port}"
-
-            self.zmq_context = zmq.Context.instance()
-            self.low_state_socket: zmq.Socket = self.zmq_context.socket(zmq.SUB)
-            self.low_state_socket.setsockopt(zmq.SUBSCRIBE, b"")
-            self.low_state_socket.setsockopt(zmq.CONFLATE, 1)
-            self.low_state_socket.setsockopt(zmq.RCVTIMEO, 10)
-            self.low_state_socket.connect(state_endpoint)
-            self.latest_low_state: LowStateMessage | None = None
-
-    def register_subscriber(self, object_name: str, port: int | None = None):
-        if object_name in self.mocap_subscribers:
-            return
-        # init ZMQ subscriber
-        port = PORTS.get(f"{object_name}_pose", port)
-        subscriber = ZMQSubscriber(port)
-        self.mocap_subscribers[object_name] = subscriber
-
-        def _sub_thread(obj_name: str):
-            while True:
-                try:
-                    pose_msg = self.mocap_subscribers[obj_name].receive_pose()
-                    if pose_msg:
-                        with self.mocap_data_lock:
-                            self.mocap_data[f"{obj_name}_pos"] = pose_msg.position
-                            self.mocap_data[f"{obj_name}_quat"] = pose_msg.quaternion
-                except zmq.Again:
-                    time.sleep(0.001)
-                except Exception as e:
-                    logger.warning(f"{obj_name} subscriber error: {e}")
-                    time.sleep(0.01)
-
-        # start subscriber thread
-        th = threading.Thread(target=_sub_thread, args=(object_name,), daemon=True)
-        th.start()
-        self.mocap_threads[object_name] = th
-
-    def _prepare_low_state(self):
-        if hasattr(self, "low_state_socket"):
-            self._receive_low_state()
-            if not self.latest_low_state:
-                return False
-
-            low_state = self.latest_low_state
-            self.root_quat_b[:] = low_state.quaternion
-            self.root_ang_vel_b[:] = low_state.gyroscope
-
-            source_joint_pos = low_state.joint_positions
-            source_joint_vel = low_state.joint_velocities
-            for dst_idx, src_idx in enumerate(self.joint_indices_in_source):
-                self.joint_pos[dst_idx] = source_joint_pos[src_idx]
-                self.joint_vel[dst_idx] = source_joint_vel[src_idx]
-
-            return True
-        elif hasattr(self, "robot"):
-            try:
-                state = self.robot.read_low_state()
-            except Exception as e:
-                logger.warning(f"Failed to read G1 low state: {e}")
-                return False
-
-            if state is None:
-                return False
-
-            # IMU
-            self.root_quat_b[:] = state.imu.quat  # [w, x, y, z]
-            self.root_ang_vel_b[:] = state.imu.omega
-
-            # Joints
-            for dst_idx, src_idx in enumerate(self.joint_indices_in_source):
-                self.joint_pos[dst_idx] = state.motor.q[src_idx]
-                self.joint_vel[dst_idx] = state.motor.dq[src_idx]
-            return True
-
-    def _receive_low_state(self):
-        """Fetch the most recent low state message from the ZMQ socket."""
-        if not hasattr(self, "low_state_socket"):
-            return
-
-        while True:
-            try:
-                data = self.low_state_socket.recv(flags=zmq.DONTWAIT)
-            except zmq.Again:
-                break
-            try:
-                self.latest_low_state = LowStateMessage.from_bytes(data)
-            except Exception as exc:
-                logger.warning(f"Failed to decode low state message: {exc}")
-
-
-    def send_command(self, cmd_q, cmd_dq, cmd_tau):
-        if self.robot_type != "g1_real":
-            self.cmd_q[self.joint_indices_unitree] = cmd_q
-            self.cmd_dq[self.joint_indices_unitree] = cmd_dq
-            self.cmd_tau[self.joint_indices_unitree] = cmd_tau
-            
-            message = LowCmdMessage(
-                q_target=self.cmd_q,
-                dq_target=self.cmd_dq,
-                tau_ff=self.cmd_tau,
-                kp=self.joint_kp_unitree,
-                kd=self.joint_kd_unitree,
-            )
-            try:
-                self.lowcmd_socket.send(message.to_bytes(), flags=zmq.DONTWAIT)
-            except zmq.Again:
-                pass
-        else:
-            cmd = self.robot.create_zero_command()
-
-            # Apply kp_level scaling (kd remains constant, consistent with original implementation)
-            kp_scaled = self.joint_kp_unitree * self._kp_level
-            kd_scaled = self.joint_kd_unitree
-
-            q_target = list(cmd.q_target)
-            dq_target = list(cmd.dq_target)
-            tau_ff = list(cmd.tau_ff)
-            kp = list(cmd.kp)
-            kd = list(cmd.kd)
-            for i_policy, idx_unitree in enumerate(self.joint_indices_unitree):
-                q_target[idx_unitree] = float(cmd_q[i_policy])
-                dq_target[idx_unitree] = float(cmd_dq[i_policy])
-                tau_ff[idx_unitree] = float(cmd_tau[i_policy])
-                kp[idx_unitree] = float(kp_scaled[idx_unitree])
-                kd[idx_unitree] = float(kd_scaled[idx_unitree])
-
-            cmd.q_target = q_target
-            cmd.dq_target = dq_target
-            cmd.tau_ff = tau_ff
-            cmd.kp = kp
-            cmd.kd = kd
-
-            self.robot.write_low_command(cmd)
-
-
-from rl_policy.wrappers import get_policy_wrappper
-from interface import build_interface
 class Node:
     def __init__(self, robot_conf, policy_conf):
         self.robot = build_interface(robot_conf)
         self.policy = get_policy_wrappper(policy_conf)
+        self.setup_ui(robot_conf)
+
+    def setup_ui(self, robot_config):
+        if robot_config.get("USE_JOYSTICK", False):
+            print("Using joystick")
+            self.use_joystick = True
+            self.wc_msg = None  # type: ignore
+            self.last_wc_msg = self.robot.read_wireless_controller()
+            print("Wireless Controller Initialized")
+        else:
+            print("Using keyboard")
+            self.use_joystick = False
+            self.key_listener_thread = threading.Thread(
+                target=self.start_key_listener, daemon=True
+            )
+            self.key_listener_thread.start()
         
     def run(self):
         try:
@@ -220,35 +43,24 @@ class Node:
 
                 if self.total_inference_cnt % 100 == 0:
                     self.perf_dict = {}
+        except KeyboardInterrupt:
+            pass
 
     def _rl_step_scheduled(self):
 
+        if not self.robot.state_ready:
+            print("state not ready")
+            return 
+        
+        self.process_user_input()
+        self.prepare_hook()
+        action_dict = self.policy(self.robot.state)
+        self.post_hook()
+        self.robot.send_command(action_dict)
 
-class Node:
-
-    def __init__(self):
-
-        # ------------------------------------------------------
-        # Joystick / keyboard setup (mirrors base_policy logic)
-        # ------------------------------------------------------
-        if robot_config.get("USE_JOYSTICK", False):
-            print("Using joystick")
-            self.use_joystick = True
-            self.wc_msg = None  # type: ignore
-            self.last_wc_msg = self.robot.read_wireless_controller()
-            print("Wireless Controller Initialized")
-        else:
-            import threading
-            print("Using keyboard")
-            self.use_joystick = False
-            self.key_listener_thread = threading.Thread(
-                target=self.start_key_listener, daemon=True
-            )
-            self.key_listener_thread.start()
-
-        # Plug-in our custom state processor & command sender
-        self.state_processor = StateProcessor(robot_config, policy_config["isaac_joint_names"])
-        self.command_sender = CommandSender(robot_config, policy_config)
+    def process_user_input(self):
+        if self.use_joystick:
+            self.process_joystick_input()
 
 
     def process_joystick_input(self):

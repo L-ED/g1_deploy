@@ -1,6 +1,6 @@
 import onnxruntime
 import torch
-from rl_policy.utils.state_processor import StateProcessor
+from msg.zmq.state_processor import StateProcessor
 
 class ActionManager:
     def __init__(self, env, control_cfg):

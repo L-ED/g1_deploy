@@ -21,8 +21,8 @@ from loguru import logger
 from utils.strings import resolve_matching_names_values, unitree_joint_names
 from utils.onnx_module import Timer
 from rl_policy.observations import Observation, ObsGroup
-from rl_policy.utils.state_processor import StateProcessor
-from rl_policy.utils.command_sender import CommandSender
+from msg.zmq.state_processor import StateProcessor
+from msg.zmq.command_sender import CommandSender
 # -------------------------------------------------------------------------------------------------
 # High-level RL policy that plugs into the existing framework
 # -------------------------------------------------------------------------------------------------

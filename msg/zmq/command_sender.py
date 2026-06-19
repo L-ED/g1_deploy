@@ -4,7 +4,7 @@ import zmq
 
 from utils.strings import resolve_matching_names_values
 from utils.strings import unitree_joint_names
-from utils.common import LowCmdMessage, PORTS
+from msg.zmq.common import LowCmdMessage, PORTS
 
 
 class CommandSender:

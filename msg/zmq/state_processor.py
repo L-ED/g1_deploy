@@ -7,7 +7,13 @@ import time
 from utils.strings import unitree_joint_names
 from loguru import logger
 from typing import Dict
-from utils.common import ZMQSubscriber, PORTS, LowStateMessage
+from msg.zmq.common import ZMQSubscriber, PORTS, LowStateMessage
+from dataclasses import dataclass
+
+@dataclass
+class State:
+    
+
 
 class StateProcessor:
     """Listens to the unitree sdk channels and converts observation into isaac compatible order.
@@ -60,6 +66,7 @@ class StateProcessor:
 
         self.root_quat_b = self.qpos[3:7]
         self.root_ang_vel_b = self.qvel[3:6]
+        
 
         self.joint_pos = self.qpos[7:]
         self.joint_vel = self.qvel[6:]
