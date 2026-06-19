@@ -28,7 +28,7 @@ class CDDSInterface:
         self.unitree_index = self.robot_cfg['unitree_index']
         # https://support.unitree.com/home/en/G1_developer/basic_motion_routine
         self.motor_mode_pr = 0 #  1 is closed chain, 0 is open
-        self.update_mode_machine_ = False
+        self.updated = False
         self.state = State()
 
     def send_command(self, cmd_dict):
@@ -49,9 +49,9 @@ class CDDSInterface:
     def receive_lowstate(self, msg: LowState_):
         self.low_state = msg
 
-        if self.update_mode_machine_ == False:
+        if self.updated == False:
             self.mode_machine_ = self.low_state.mode_machine
-            self.update_mode_machine_ = True
+            self.updated = True
 
         self.state.quat[:] = np.array(
             msg.imu_state.quaternion, dtype=np.float32)  # scalar first

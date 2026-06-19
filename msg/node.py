@@ -11,7 +11,7 @@ from .zmq.interface import build_interface
 class Node:
     def __init__(self, robot_conf, policy_conf):
         self.robot = build_interface(robot_conf)
-        self.policy = get_policy_wrappper(policy_conf)
+        self.policy = get_policy_wrappper(policy_conf, self.robot)
         self.setup_ui(robot_conf)
 
     def setup_ui(self, robot_config):
@@ -48,13 +48,13 @@ class Node:
 
     def _rl_step_scheduled(self):
 
-        if not self.robot.state_ready:
+        if not self.robot.updated:
             print("state not ready")
             return 
         
         self.process_user_input()
         self.prepare_hook()
-        action_dict = self.policy(self.robot.state)
+        action_dict = self.policy()
         self.post_hook()
         self.robot.send_command(action_dict)
 

@@ -30,8 +30,9 @@ class ActionManager:
 
 class PolicyWrapper:
 
-    def __init__(self, low_state: StateProcessor, policy_path, policy_config, device):
+    def __init__(self, policy_config, robot, device):
         self.device = device
+        self.robot = robot
         self.cfg = policy_config
         self.setup_policy(policy_path)
 
