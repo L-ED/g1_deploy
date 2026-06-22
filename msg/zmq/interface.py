@@ -9,18 +9,20 @@ from g1_deploy.msg.utils import State
 
 class ZMQInterface:
 
-    def __init__(self, robot_config, dest_joint_names):
+    def __init__(self, robot_config, policy_joint_order):
         
         self.robot_config = robot_config
         self.state = None
         self.robot_type = robot_config["ROBOT_TYPE"]
-        self.joint_indices_in_source = [unitree_joint_names.index(name) for name in dest_joint_names]
-        self.joint_names = dest_joint_names
-        self.state = State(len(self.joint_names))
+        self.unitree_index = [
+            policy_joint_order.index(name) for name in 
+            robot_config['robot_joint_names']]
+        self.state = State(len(self.unitree_index))
         self.default_pos = np.array(robot_config['default_pos'])
         self.cmd_q = np.zeros_like(self.default_pos)
         self.cmd_dq = np.zeros_like(self.default_pos)
         self.cmd_tau = np.zeros_like(self.default_pos)
+        self.init_connection()
 
     def init_connection(self):
         if self.robot_type == "g1_real":
@@ -68,7 +70,7 @@ class ZMQInterface:
             self.latest_low_state: LowStateMessage | None = None
 
 
-    def _prepare_low_state(self):
+    def receive_lowstate(self):
         if hasattr(self, "low_state_socket"):
             self._receive_low_state()
             if not self.latest_low_state:
@@ -81,7 +83,7 @@ class ZMQInterface:
 
             source_joint_pos = low_state.joint_positions
             source_joint_vel = low_state.joint_velocities
-            for dst_idx, src_idx in enumerate(self.joint_indices_in_source):
+            for dst_idx, src_idx in enumerate(self.unitree_index):
                 self.state.joint_pos[dst_idx] = source_joint_pos[src_idx]
                 self.state.joint_vel[dst_idx] = source_joint_vel[src_idx]
 
@@ -102,7 +104,7 @@ class ZMQInterface:
             self.state.base_lin_acc[:] = state.imu.omega
 
             # Joints
-            for dst_idx, src_idx in enumerate(self.joint_indices_in_source):
+            for dst_idx, src_idx in enumerate(self.unitree_index):
                 self.state.joint_pos[dst_idx] = state.motor.q[src_idx] 
                 self.state.joint_vel[dst_idx] = state.motor.dq[src_idx] 
             return True

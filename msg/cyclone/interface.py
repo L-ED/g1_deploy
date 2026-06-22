@@ -16,20 +16,27 @@ from g1_deploy.msg.utils import State
 
 class CDDSInterface:
 
-    def __init__(self, robot_cfg):
+    def __init__(self, robot_cfg, policy_joint_order):
          # create publisher #
         self.robot_cfg = robot_cfg
         self.lowcmd_publisher_ = ChannelPublisher("rt/lowcmd", LowCmd_)
         self.lowcmd_publisher_.Init()
+        self.low_cmd = unitree_hg_msg_dds__LowCmd_() 
+        self.crc = CRC()
 
         # create subscriber # 
         self.lowstate_subscriber = ChannelSubscriber("rt/lowstate", LowState_)
         self.lowstate_subscriber.Init(self.receive_lowstate, 10)
-        self.unitree_index = self.robot_cfg['unitree_index']
+        self.unitree_index = [
+            policy_joint_order.index(name) for name in 
+            robot_cfg['robot_joint_names']]
+        # self.unitree_index = self.robot_cfg['unitree_index']
         # https://support.unitree.com/home/en/G1_developer/basic_motion_routine
         self.motor_mode_pr = 0 #  1 is closed chain, 0 is open
         self.updated = False
         self.state = State()
+        self.wireless_remote = None
+
 
     def send_command(self, cmd_dict):
         for i in range(self.unitree_index):
@@ -42,6 +49,7 @@ class CDDSInterface:
             self.low_cmd.motor_cmd[i].kp = cmd_dict['kp'][idx] 
             self.low_cmd.motor_cmd[i].kd = cmd_dict['kd'][idx]
             self.low_cmd.motor_cmd[i].tau = cmd_dict['tau'][idx]
+
 
         self.low_cmd.crc = self.crc.Crc(self.low_cmd)
         self.lowcmd_publisher_.Write(self.low_cmd)
@@ -65,11 +73,7 @@ class CDDSInterface:
             self.state.joint_vel[idx] = state.dq
             self.state.joint_tau[idx] = state.tau_est
 
-        self.quaternion = np.array(
-            msg.imu_state.quaternion, dtype=np.float32
-        )  # scalar first
-        self.acc = np.array(msg.imu_state.accelerometer, dtype=np.float32)
-        self.gyro = np.array(msg.imu_state.gyroscope, dtype=np.float32)
+        self.wireless_remote = self.low_state.wireless_remote
 
     def update_sim_state(self, msg):
         # get proprioception from simulator
