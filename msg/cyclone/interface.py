@@ -50,7 +50,6 @@ class CDDSInterface:
             self.low_cmd.motor_cmd[i].kd = cmd_dict['kd'][idx]
             self.low_cmd.motor_cmd[i].tau = cmd_dict['tau'][idx]
 
-
         self.low_cmd.crc = self.crc.Crc(self.low_cmd)
         self.lowcmd_publisher_.Write(self.low_cmd)
     
@@ -61,10 +60,10 @@ class CDDSInterface:
             self.mode_machine_ = self.low_state.mode_machine
             self.updated = True
 
-        self.state.quat[:] = np.array(
+        self.state.root_quat_b[:] = np.array(
             msg.imu_state.quaternion, dtype=np.float32)  # scalar first
-        self.state.base_lin_acc[:] = np.array(msg.imu_state.accelerometer, dtype=np.float32)
-        self.state.base_ang_vel[:] = np.array(msg.imu_state.gyroscope, dtype=np.float32)
+        self.state.root_lin_acc_b[:] = np.array(msg.imu_state.accelerometer, dtype=np.float32)
+        self.state.root_ang_vel_b[:] = np.array(msg.imu_state.gyroscope, dtype=np.float32)
 
         # g1 has no unused sections, so it works
         for i, state in enumerate(msg.motor_state):

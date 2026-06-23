@@ -23,11 +23,10 @@ class _RegistryMixin:
             location = f"{conflicting_cls._file}:{conflicting_cls._line}"
             raise ValueError(f"Term {cls_name} already registered in {location}")
 
-
 class Observation(_RegistryMixin):
     def __init__(self, env: "BasePolicy", scale: float = 1.0, **kwargs):
         self.env = env
-        self.state_processor = env.state_processor
+        self.state_processor = env.robot.state
         self.scale = scale
     
     def reset(self):
@@ -39,22 +38,54 @@ class Observation(_RegistryMixin):
     def compute(self, scale: float = 1.0) -> np.ndarray:
         raise NotImplementedError
 
-class ObsGroup:
+class ObsManager:
     def __init__(
         self,
-        name: str,
-        funcs: Dict[str, Observation],
+        env,
+        observation_config
     ):
-        self.name = name
-        self.funcs = funcs
+        self.groups_delay_buffers = {}
+        for group_name, group_cfg in observation_config:
+            group_delay_bufs = {}
+            # if group_cfge
+            for term_cfg in group_cfg:
+                term_cfg['func'] = OBS_FUNC_REGISTRY[term_cfg['func_name']]
+                if term_cfg.term_cfg.history_length > 0:
+                    group_delay_bufs[term_cfg['name']] =  CircularBuffer(
+                        max_len=term_cfg['history_length'],
+                        batch_size=self._env.num_envs
+                    )
+            self.groups_delay_buffers[group_name] = group_delay_bufs
+                
 
     def compute(self) -> np.ndarray:
-        # torch.compiler.cudagraph_mark_step_begin()
         output = self._compute()
         return output
     
-    def _compute(self) -> np.ndarray:
+    def _compute_group(self) -> np.ndarray:
         # update only if outdated
-        tensors = [func.compute(scale=func.scale) for func in self.funcs.values()]
-        return np.concatenate(tensors, axis=-1)
+        for term_name, term_cfg in obs_terms:
+        obs = term_cfg.func(self._env, **term_cfg.params).clone()
+        
+        if term_cfg.clip:
+            obs = obs.clip_(min=term_cfg.clip[0], max=term_cfg.clip[1])
+        if term_cfg.scale is not None:
+            scale = term_cfg.scale
+            obs = obs.mul_(scale)
 
+        if term_cfg.history_length > 0:
+            circular_buffer = self._group_obs_term_history_buffer[group_name][term_name]
+            if update_history or not circular_buffer.is_initialized:
+            circular_buffer.append(obs)
+
+            if term_cfg.flatten_history_dim:
+            group_obs[term_name] = circular_buffer.buffer.reshape(self._env.num_envs, -1)
+            else:
+            group_obs[term_name] = circular_buffer.buffer
+        else:
+            group_obs[term_name] = obs
+
+        if self._group_obs_concatenate[group_name]:
+            result = torch.cat(
+                list(group_obs.values()), dim=self._group_obs_concatenate_dim[group_name]
+            )
