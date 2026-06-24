@@ -2,6 +2,7 @@
 import os
 import onnxruntime
 from rl_policy.observations import Observation, ObsGroup
+from rl_policy.observations import ObsManager
 import numpy as np
 class ActionManager:
     def __init__(self, env, control_cfg):
@@ -46,6 +47,7 @@ class PolicyWrapper:
             self.cfg["init_state"]["default_joint_pos"], self.joint_order)
         self.last_action  = np.zeros(len(self.joint_order))
         self.action_manager = ActionManager(self, self.cfg['control'])
+        self.obs_manager = ObsManager(self, self.cfg['observations'])
         self.prev_action = np.zeros(len(self.joint_order))
         self.setup_observations()
 
@@ -119,3 +121,38 @@ class PolicyWrapper:
             'kp': self.stiffness,
             'kd': self.damping
         }
+
+
+class MotionTopic:
+    def __init__(self, topic_name):
+        pass
+
+
+class MotionCommand:
+
+    def __init__(self, command_cfg):
+        self.trajectories = {}
+        self.cur_trj = None
+        self.idx = 0
+        self.ended = False
+        for traj_path in command_cfg['trajectories']:
+            name = os.path.basename(traj_path)
+            self.trajectories[name] = self.load_trajectory(traj_path)
+        self.names = list(self.trajectories.keys())
+        self.lenght = {n: len(trj) for n, trj in self.trajectories}
+        self.act_trj = self.names[0]
+
+    def update(self):
+        if self.finished:
+            return 
+        self.idx += 1
+        if self.idx == len(self.lenght[self.act_trj]):
+            self.finished=True
+
+    def reset(self):
+        self.finished=False
+        self.idx=0
+    
+    def switch_trajectory(self, incr):
+        name = self.names.index(self.act_trj) + incr 
+        self.act_trj = name

@@ -19,6 +19,7 @@ class CDDSInterface:
     def __init__(self, robot_cfg, policy_joint_order):
          # create publisher #
         self.robot_cfg = robot_cfg
+        ChannelFactoryInitialize(robot_cfg['domain_id'], robot_cfg['interface'])
         self.lowcmd_publisher_ = ChannelPublisher("rt/lowcmd", LowCmd_)
         self.lowcmd_publisher_.Init()
         self.low_cmd = unitree_hg_msg_dds__LowCmd_() 
