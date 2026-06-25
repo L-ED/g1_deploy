@@ -27,8 +27,6 @@ class ActionManager:
     def scale_and_add(self, raw_act, default_joint_pos):
         return raw_act*self.act_scale + default_joint_pos
 
-
-
 class PolicyWrapper:
 
     def __init__(self, policy_dir_path, robot, device='cpu'):
@@ -39,8 +37,8 @@ class PolicyWrapper:
         self.parse_config(config_path)
         self.setup_policy(policy_path)
 
-    def parse_config(self):
-
+    def parse_config(self, config_path):
+        self.cfg = self.load_yaml_conf(config_path)
         self.joint_order = self.cfg["joint_order"]
         self.num_dof = len(self.joint_order)
         self.default_dof_angles = self.to_tensor(
@@ -48,8 +46,14 @@ class PolicyWrapper:
         self.last_action  = np.zeros(len(self.joint_order))
         self.action_manager = ActionManager(self, self.cfg['control'])
         self.obs_manager = ObsManager(self, self.cfg['observations'])
+        self.command_manager = CommandManager(self, self.cfg['command']) # change to CommandManager later
         self.prev_action = np.zeros(len(self.joint_order))
         self.setup_observations()
+        self.reset_callbacks = []
+        self.update_callbacks = []
+        for manager in [self.obs_manager, self.command_manager]:
+            self.reset_callbacks.append(manager.reset)
+            self.update_callbacks.append(manager.update)
 
     def to_tensor(self, cfg_dict, order, dtype = np.float32):
         return np.asarray(
@@ -66,25 +70,6 @@ class PolicyWrapper:
             return self.onnx_policy_session.run([self.onnx_output_name], {self.onnx_input_name: obs})[0]
         self.policy = policy_act
 
-
-    def setup_observations(self):
-        """Setup observations for policy inference"""
-        self.observations: Dict[str, ObsGroup] = {}
-        self.reset_callbacks = []
-        self.update_callbacks = []
-        # Create observation instances based on config
-        for obs_group, obs_items in self.obs_cfg.items():
-            print(f"obs_group: {obs_group}")
-            obs_funcs = {}
-            for obs_name, obs_config in obs_items.items():
-                obs_class: Type[Observation] = Observation.registry[obs_name]
-                obs_func = obs_class(env=self, **obs_config)
-                obs_funcs[obs_name] = obs_func
-                self.reset_callbacks.append(obs_func.reset)
-                self.update_callbacks.append(obs_func.update)
-                print(f"\t{obs_name}: {obs_config}")
-            self.observations[obs_group] = ObsGroup(obs_group, obs_funcs)
-
     def reset(self):
         for reset_callback in self.reset_callbacks:
             reset_callback()
@@ -93,20 +78,9 @@ class PolicyWrapper:
         for update_callback in self.update_callbacks:
             update_callback()
 
-    def prepare_obs_for_rl(self):
-        """Prepare observation for policy inference using observation classes"""
-        obs_dict: Dict[str, np.ndarray] = {}
-        self.update()
-        for obs_group in self.observations.values():
-            obs = obs_group.compute()
-            obs_dict[obs_group.name] = obs[None, :].astype(np.float32)
-        obs = obs_dict[obs_group.name]
-
-        return obs_dict, obs
-
     def __call__(self):
-        obs_d, obs = self.prepare_obs_for_rl()
-        raw_action = self.policy(obs)
+        obs_d = self.obs_manager.compute()
+        raw_action = self.policy(obs_d['policy'])
         self.last_action = raw_action[:]
         action = self.process_action(raw_action)
         return action
@@ -121,6 +95,10 @@ class PolicyWrapper:
             'kp': self.stiffness,
             'kd': self.damping
         }
+    
+
+    def set_next_trajectory(self):
+        pass
 
 
 class MotionTopic:
@@ -128,19 +106,73 @@ class MotionTopic:
         pass
 
 
+class CommandManager:
+
+    cmnds_map = {
+        "base_velocity": VelocityCommand,
+        'motion': MotionCommand
+    }
+
+    def __init__(self, env, commands_cfg):
+        self.env = env
+        self.commmands = {
+            name:self.cmnds_map[name](cmd_conf)
+            for name, cmd_conf in commands_cfg.items()
+        }
+
+    def update(self):
+        for cmd in self.commmands.values();
+            cmd.update()
+    
+    def reset(self):
+        for cmd in self.commmands.values();
+            cmd.reset()
+
+    
+
+class VelocityCommand:
+    def __init__(self, env, command_cfg):
+        self.controller = env.robot.wireless_controller
+        self.ranges = self.command_cfg['ranges']
+        self.vel_command_b = np.zeros(3)
+    
+    def update(self):
+        self.vel_command_b[:] = [self.controller.Ly, self.controller.Lx, self.controller.Rx]
+        for i, name in enumerate(['lin_vel_x', 'lin_vel_y', 'ang_vel_z']):
+            neg, pos = self.ranges[name]
+            self.vel_command_b[i] *= neg if self.vel_command_b[i]<0 else pos
+    
+    def reset(self):
+        pass
+
+
 class MotionCommand:
 
     def __init__(self, command_cfg):
         self.trajectories = {}
+        self.cfg =  command_cfg
         self.cur_trj = None
         self.idx = 0
         self.ended = False
+        self.body_ids = command_cfg['body_indexes']
+        self.anchor_id = command_cfg['anchor_index']
+        
         for traj_path in command_cfg['trajectories']:
             name = os.path.basename(traj_path)
             self.trajectories[name] = self.load_trajectory(traj_path)
         self.names = list(self.trajectories.keys())
         self.lenght = {n: len(trj) for n, trj in self.trajectories}
         self.act_trj = self.names[0]
+
+    def load_trajectory(self, trj_p):
+        data = np.load(trj_p)
+
+        data["body_pos_w"] = data["body_pos_w"][:, self.body_ids]
+        data["body_quat_w"] = data["body_quat_w"][:, self.body_ids]
+
+        data["body_lin_vel_w"] = data["body_lin_vel_w"][:, self.body_ids]
+        data["body_ang_vel_w"] = data["body_ang_vel_w"][:, self.body_ids]
+        return data
 
     def update(self):
         if self.finished:
@@ -156,3 +188,39 @@ class MotionCommand:
     def switch_trajectory(self, incr):
         name = self.names.index(self.act_trj) + incr 
         self.act_trj = name
+
+    def get_cur_slice(self, name):
+        return self.trajectories[self.act_trj][name]
+
+    @property
+    def joint_pos(self):
+        return self.get_cur_slice('joint_pos')[self.idx, :]
+    
+    @property
+    def joint_vel(self):
+        return self.get_cur_slice('joint_vel')[self.idx, :]
+    
+    @property
+    def body_pos_w(self):
+        return self.get_cur_slice('body_pos_w')[self.idx, :]
+    
+    @property
+    def body_quat_w(self):
+        return self.get_cur_slice('body_quat_w')[self.idx, :]
+
+    @property
+    def body_lin_vel_w(self):
+        return self.get_cur_slice('body_lin_vel_w')[self.idx, :]
+    
+    @property
+    def anchor_body_pos_w(self):
+        return self.get_cur_slice('body_pos_w')[self.idx, self.anchor_id]
+
+    @property
+    def anchor_body_quat_w(self):
+        return self.get_cur_slice('body_quat_w')[self.idx, self.anchor_id]
+
+    @property
+    def command(self):
+        return np.concatenate([self.joint_pos, self.joint_vel], axis=1)
+

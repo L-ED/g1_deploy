@@ -100,3 +100,11 @@ class ObsManager:
             )
             return result
         return group_obs
+    
+    def reset(self):
+        for obs_gr_bufs in self.group_history_buffer.values():
+            for buf in obs_gr_bufs:
+                buf.reset()
+
+    def update(self):
+        pass
