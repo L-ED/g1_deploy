@@ -4,7 +4,7 @@ import
 from typing import TYPE_CHECKING, Any, Dict, Type
 from . import obs_funcs
 if TYPE_CHECKING:
-    from msg.zmq.state_processor import StateProcessor
+    from msg.Interface.zmq.state_processor import StateProcessor
     from rl_policy.base_policy import BasePolicy
 
 

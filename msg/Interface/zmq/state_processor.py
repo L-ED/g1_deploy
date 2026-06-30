@@ -7,7 +7,7 @@ import time
 from utils.strings import unitree_joint_names
 from loguru import logger
 from typing import Dict
-from msg.zmq.common import ZMQSubscriber, PORTS, LowStateMessage
+from msg.Interface.zmq.common import ZMQSubscriber, PORTS, LowStateMessage
 from dataclasses import dataclass
 
 @dataclass

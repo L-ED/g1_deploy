@@ -27,6 +27,10 @@ class ActionManager:
     def scale_and_add(self, raw_act, default_joint_pos):
         return raw_act*self.act_scale + default_joint_pos
 
+
+
+
+
 class PolicyWrapper:
 
     def __init__(self, policy_dir_path, robot, device='cpu'):
@@ -96,10 +100,29 @@ class PolicyWrapper:
             'kd': self.damping
         }
     
-
     def set_next_trajectory(self):
         pass
 
+    def dump(self):
+        self.robot.dump()
+
+    def activate(self):
+        self.robot.activate()
+        self.
+        if isinstance(self.command_manager, MotionCommand):
+            commands = interpolate(
+                self.robot.state['joint_pos'], 
+                self.motion_manager['motion'].joint_pos, 
+                3*50
+            )
+        else:
+            commands = interpolate(self.robot.state['joint_pos'], self.standing_pose, 3*50)
+
+def interpolate(s, e, num):
+    delta = (e-s)/num
+    return np.array([
+        s + delta*i for i in range(num)
+    ])
 
 class MotionTopic:
     def __init__(self, topic_name):
@@ -121,14 +144,12 @@ class CommandManager:
         }
 
     def update(self):
-        for cmd in self.commmands.values();
+        for cmd in self.commmands.values():
             cmd.update()
     
     def reset(self):
-        for cmd in self.commmands.values();
+        for cmd in self.commmands.values():
             cmd.reset()
-
-    
 
 class VelocityCommand:
     def __init__(self, env, command_cfg):

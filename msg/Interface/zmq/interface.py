@@ -2,7 +2,7 @@ import zmq
 import sys
 from utils.strings import resolve_matching_names_values
 from utils.strings import unitree_joint_names
-from msg.zmq.common import LowCmdMessage, LowStateMessage, PORTS
+from msg.Interface.zmq.common import LowCmdMessage, LowStateMessage, PORTS
 from dataclasses import dataclass
 import numpy as np
 from g1_deploy.msg.utils import State

@@ -2,16 +2,25 @@ import sched
 import time
 import threading
 import struct
+import yaml
+import os
 from sshkeyboard import listen_keyboard
 from loguru import logger
 from termcolor import colored
-
+from pathlib import Path
 from g1_deploy.rl_policy.wrappers import get_policy_wrappper
-from .msg import build_interface
+from .interface import INTERFACE_MAP
+
+def load_yaml(path):
+    with open(path, 'r') as f:
+        dat = yaml.load(f)
+    return dat
 
 class Node:
-    def __init__(self, robot_conf, policies_conf):
-        self.robot = build_interface(robot_conf)
+    def __init__(self, conf_path):
+        robot_conf = load_yaml(os.path.join(conf_path, 'robot.yaml'))
+        policies_conf = load_yaml(os.path.join(conf_path, 'policy.yaml'))
+        self.robot = INTERFACE_MAP[robot_conf['con_type']](robot_conf)
         self.load_policies(policies_conf)
         self.setup_ui(robot_conf)
 
@@ -189,3 +198,16 @@ class UnitreeRemoteController:
     def parse(self,remoteData):
         self.parse_stick(remoteData)
         self.parse_button((remoteData[2],remoteData[3]))
+
+
+if __name__ == "__main__":
+
+    file_path = Path(__file__).resolve()
+    dir_path = file_path.parent.parent
+    config_path = os.path.join(file_path, 'config', 'policy')
+    node = Node(config_path)
+    node.run()
+
+
+
+    

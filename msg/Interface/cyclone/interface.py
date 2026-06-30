@@ -16,7 +16,7 @@ from g1_deploy.msg.utils import State
 
 class CDDSInterface:
 
-    def __init__(self, robot_cfg, policy_joint_order):
+    def __init__(self, robot_cfg):
          # create publisher #
         self.robot_cfg = robot_cfg
         ChannelFactoryInitialize(robot_cfg['domain_id'], robot_cfg['interface'])
@@ -28,10 +28,8 @@ class CDDSInterface:
         # create subscriber # 
         self.lowstate_subscriber = ChannelSubscriber("rt/lowstate", LowState_)
         self.lowstate_subscriber.Init(self.receive_lowstate, 10)
-        self.unitree_index = [
-            policy_joint_order.index(name) for name in 
-            robot_cfg['robot_joint_names']]
-        # self.unitree_index = self.robot_cfg['unitree_index']
+        self.unitree_index = robot_cfg['unitree_index']
+        
         # https://support.unitree.com/home/en/G1_developer/basic_motion_routine
         self.motor_mode_pr = 0 #  1 is closed chain, 0 is open
         self.updated = False

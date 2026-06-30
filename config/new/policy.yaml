@@ -1,0 +1,373 @@
+commands:
+  motion:
+    resampling_time_range: !!python/tuple
+    - 1000000000.0
+    - 1000000000.0
+    debug_vis: true
+    motion_file: /home/led/rl/dataset/g1_acro_converted/cartwheel_88_09_poses.npz_1.npz
+    anchor_body_name: torso_link
+    body_names: !!python/tuple
+    - pelvis
+    - left_hip_roll_link
+    - left_knee_link
+    - left_ankle_roll_link
+    - right_hip_roll_link
+    - right_knee_link
+    - right_ankle_roll_link
+    - torso_link
+    - left_shoulder_roll_link
+    - left_elbow_link
+    - left_wrist_yaw_link
+    - right_shoulder_roll_link
+    - right_elbow_link
+    - right_wrist_yaw_link
+
+actions:
+  joint_pos:
+    entity_name: robot
+    clip: null
+    transmission_type: !!python/object/apply:mjlab.actuator.actuator.TransmissionType
+    - joint
+    actuator_names: !!python/tuple
+    - .*
+    scale:
+      .*_elbow_joint: 0.43857731392336724
+      .*_shoulder_pitch_joint: 0.43857731392336724
+      .*_shoulder_roll_joint: 0.43857731392336724
+      .*_shoulder_yaw_joint: 0.43857731392336724
+      .*_wrist_roll_joint: 0.43857731392336724
+      .*_hip_yaw_joint: 0.5475464629911068
+      waist_yaw_joint: 0.5475464629911068
+      .*_hip_roll_joint: 0.27750187986813435
+      .*_knee_joint: 0.27750187986813435
+      .*_hip_pitch_joint: 0.27750187986813435
+      .*_wrist_pitch_joint: 0.07450087032950714
+      .*_wrist_yaw_joint: 0.07450087032950714
+      waist_pitch_joint: 0.43857731392336724
+      waist_roll_joint: 0.43857731392336724
+      .*_ankle_pitch_joint: 0.43857731392336724
+      .*_ankle_roll_joint: 0.43857731392336724
+    offset: 0.0
+    preserve_order: false
+    use_default_offset: false
+    command_name: motion
+
+robot:
+      init_state:
+        pos: !!python/tuple
+        - 0
+        - 0
+        - 0.8
+        rot: !!python/tuple
+        - 1.0
+        - 0.0
+        - 0.0
+        - 0.0
+        lin_vel: !!python/tuple
+        - 0.0
+        - 0.0
+        - 0.0
+        ang_vel: !!python/tuple
+        - 0.0
+        - 0.0
+        - 0.0
+        joint_pos:
+          .*_hip_pitch_joint: -0.1
+          .*_knee_joint: 0.3
+          .*_ankle_pitch_joint: -0.2
+          .*_shoulder_pitch_joint: 0.35
+          .*_elbow_joint: 0.87
+          left_shoulder_roll_joint: 0.18
+          right_shoulder_roll_joint: -0.18
+        joint_vel:
+          .*: 0.0
+      spec_fn: !!python/name:mjlab_tasks.assets.g1.g1_unitreedrive.get_spec ''
+      articulation:
+        actuators: !!python/tuple
+        - target_names_expr: !!python/tuple
+          - .*_elbow_joint
+          - .*_shoulder_pitch_joint
+          - .*_shoulder_roll_joint
+          - .*_shoulder_yaw_joint
+          - .*_wrist_roll_joint
+          transmission_type: !!python/object/apply:mjlab.actuator.actuator.TransmissionType
+          - joint
+          armature: 0.003609725
+          frictionloss: 0.0
+          stiffness: 14.25062309787429
+          damping: 0.907222843292423
+          effort_limit: 25.0
+          X1: 30.86
+          X2: 40.13
+          Y1: 24.8
+          Y2: 31.9
+          Fs: 0.6
+          Fd: 0.06
+          Va: 0.01
+        - target_names_expr: !!python/tuple
+          - .*_hip_yaw_joint
+          - waist_yaw_joint
+          transmission_type: !!python/object/apply:mjlab.actuator.actuator.TransmissionType
+          - joint
+          armature: 0.01017752004132231
+          frictionloss: 0.0
+          stiffness: 40.17923863450712
+          damping: 2.557889775413375
+          effort_limit: 88.0
+          X1: 22.63
+          X2: 35.52
+          Y1: 71
+          Y2: 83.3
+          Fs: 1.6
+          Fd: 0.16
+          Va: 0.01
+        - target_names_expr: !!python/tuple
+          - .*_hip_roll_joint
+          - .*_knee_joint
+          - .*_hip_pitch_joint
+          transmission_type: !!python/object/apply:mjlab.actuator.actuator.TransmissionType
+          - joint
+          armature: 0.025101924999999997
+          frictionloss: 0.0
+          stiffness: 99.09842777666111
+          damping: 6.308801853496639
+          effort_limit: 110.0
+          X1: 14.5
+          X2: 22.7
+          Y1: 111.0
+          Y2: 131.0
+          Fs: 2.4
+          Fd: 0.24
+          Va: 0.01
+        - target_names_expr: !!python/tuple
+          - .*_wrist_pitch_joint
+          - .*_wrist_yaw_joint
+          transmission_type: !!python/object/apply:mjlab.actuator.actuator.TransmissionType
+          - joint
+          armature: 0.00425
+          frictionloss: 0.0
+          stiffness: 16.77832748089279
+          damping: 1.06814150219
+          effort_limit: 5.0
+          X1: 15.3
+          X2: 24.76
+          Y1: 4.8
+          Y2: 8.6
+          Fs: 0.6
+          Fd: 0.06
+          Va: 0.01
+        - target_names_expr: !!python/tuple
+          - waist_pitch_joint
+          - waist_roll_joint
+          transmission_type: !!python/object/apply:mjlab.actuator.actuator.TransmissionType
+          - joint
+          armature: 0.00721945
+          frictionloss: 0.0
+          stiffness: 28.50124619574858
+          damping: 1.814445686584846
+          effort_limit: 50.0
+          X1: 30.86
+          X2: 40.13
+          Y1: 49.6
+          Y2: 63.8
+          Fs: 1.2
+          Fd: 0.12
+          Va: 0.01
+        - target_names_expr: !!python/tuple
+          - .*_ankle_pitch_joint
+          - .*_ankle_roll_joint
+          transmission_type: !!python/object/apply:mjlab.actuator.actuator.TransmissionType
+          - joint
+          armature: 0.00721945
+          frictionloss: 0.0
+          stiffness: 28.50124619574858
+          damping: 1.814445686584846
+          effort_limit: 50.0
+          X1: 30.86
+          X2: 40.13
+          Y1: 49.6
+          Y2: 63.8
+          Fs: 1.2
+          Fd: 0.12
+          Va: 0.01
+
+observations:
+  policy:
+    terms:
+      command:
+        func: generated_commands
+        params:
+          command_name: motion
+        noise: null
+        clip: null
+        scale: null
+        delay_min_lag: 0
+        delay_max_lag: 0
+        delay_per_env: true
+        delay_hold_prob: 0.0
+        delay_update_period: 0
+        delay_per_env_phase: true
+        history_length: 0
+        flatten_history_dim: true
+      motion_anchor_ori_b:
+        func: motion_anchor_ori_b
+        params:
+          command_name: motion
+        noise:
+          operation: add
+          _tensor_cache: {}
+          n_min: -0.05
+          n_max: 0.05
+        clip: null
+        scale: null
+        delay_min_lag: 0
+        delay_max_lag: 0
+        delay_per_env: true
+        delay_hold_prob: 0.0
+        delay_update_period: 0
+        delay_per_env_phase: true
+        history_length: 0
+        flatten_history_dim: true
+      base_ang_vel:
+        func: builtin_sensor
+        params:
+          sensor_name: robot/imu_ang_vel
+        noise:
+          operation: add
+          _tensor_cache: {}
+          n_min: -0.2
+          n_max: 0.2
+        clip: null
+        scale: null
+        delay_min_lag: 0
+        delay_max_lag: 0
+        delay_per_env: true
+        delay_hold_prob: 0.0
+        delay_update_period: 0
+        delay_per_env_phase: true
+        history_length: 0
+        flatten_history_dim: true
+      joint_pos:
+        func: joint_pos_rel
+        params:
+          biased: true
+        noise:
+          operation: add
+          _tensor_cache: {}
+          n_min: -0.01
+          n_max: 0.01
+        clip: null
+        scale: null
+        delay_min_lag: 0
+        delay_max_lag: 0
+        delay_per_env: true
+        delay_hold_prob: 0.0
+        delay_update_period: 0
+        delay_per_env_phase: true
+        history_length: 0
+        flatten_history_dim: true
+      joint_vel:
+        func: joint_vel_rel
+        params: {}
+        noise:
+          operation: add
+          _tensor_cache: {}
+          n_min: -0.5
+          n_max: 0.5
+        clip: null
+        scale: null
+        delay_min_lag: 0
+        delay_max_lag: 0
+        delay_per_env: true
+        delay_hold_prob: 0.0
+        delay_update_period: 0
+        delay_per_env_phase: true
+        history_length: 0
+        flatten_history_dim: true
+      actions:
+        func: last_action
+        params: {}
+        noise: null
+        clip: null
+        scale: null
+        delay_min_lag: 0
+        delay_max_lag: 0
+        delay_per_env: true
+        delay_hold_prob: 0.0
+        delay_update_period: 0
+        delay_per_env_phase: true
+        history_length: 0
+        flatten_history_dim: true
+    concatenate_terms: true
+    concatenate_dim: -1
+    enable_corruption: true
+    history_length: null
+    flatten_history_dim: true
+    nan_policy: disabled
+    nan_check_per_term: true
+
+
+body_order:
+  - 'pelvis' 
+  - 'left_hip_pitch_link' 
+  - 'left_hip_roll_link' 
+  - 'left_hip_yaw_link' 
+  - 'left_knee_link' 
+  - 'left_ankle_pitch_link' 
+  - 'left_ankle_roll_link' 
+  - 'right_hip_pitch_link' 
+  - 'right_hip_roll_link' 
+  - 'right_hip_yaw_link' 
+  - 'right_knee_link' 
+  - 'right_ankle_pitch_link' 
+  - 'right_ankle_roll_link' 
+  - 'waist_yaw_link' 
+  - 'waist_roll_link' 
+  - 'torso_link' 
+  - 'left_shoulder_pitch_link' 
+  - 'left_shoulder_roll_link' 
+  - 'left_shoulder_yaw_link' 
+  - 'left_elbow_link' 
+  - 'left_wrist_roll_link' 
+  - 'left_wrist_pitch_link' 
+  - 'left_wrist_yaw_link' 
+  - 'right_shoulder_pitch_link' 
+  - 'right_shoulder_roll_link' 
+  - 'right_shoulder_yaw_link' 
+  - 'right_elbow_link' 
+  - 'right_wrist_roll_link' 
+  - 'right_wrist_pitch_link' 
+  - 'right_wrist_yaw_link
+
+joint_order:
+  - 'left_hip_pitch_joint' 
+  - 'left_hip_roll_joint' 
+  - 'left_hip_yaw_joint' 
+  - 'left_knee_joint' 
+  - 'left_ankle_pitch_joint' 
+  - 'left_ankle_roll_joint' 
+  - 'right_hip_pitch_joint' 
+  - 'right_hip_roll_joint' 
+  - 'right_hip_yaw_joint' 
+  - 'right_knee_joint' 
+  - 'right_ankle_pitch_joint' 
+  - 'right_ankle_roll_joint' 
+  - 'waist_yaw_joint' 
+  - 'waist_roll_joint' 
+  - 'waist_pitch_joint' 
+  - 'left_shoulder_pitch_joint' 
+  - 'left_shoulder_roll_joint' 
+  - 'left_shoulder_yaw_joint' 
+  - 'left_elbow_joint' 
+  - 'left_wrist_roll_joint' 
+  - 'left_wrist_pitch_joint' 
+  - 'left_wrist_yaw_joint' 
+  - 'right_shoulder_pitch_joint'
+  -  'right_shoulder_roll_joint' 
+  - 'right_shoulder_yaw_joint' 
+  - 'right_elbow_joint' 
+  - 'right_wrist_roll_joint'
+  -  'right_wrist_pitch_joint' 
+  - 'right_wrist_yaw_joint
+
+unitree_index: [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28]
