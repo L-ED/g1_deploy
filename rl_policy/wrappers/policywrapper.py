@@ -4,6 +4,8 @@ import onnxruntime
 from rl_policy.observations import Observation, ObsGroup
 from rl_policy.observations import ObsManager
 import numpy as np
+from g1_deploy.utils import load_yaml
+
 class ActionManager:
     def __init__(self, env, control_cfg):
         self.act_scale = env.to_tensor(

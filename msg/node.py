@@ -10,11 +10,7 @@ from termcolor import colored
 from pathlib import Path
 from g1_deploy.rl_policy.wrappers import get_policy_wrappper
 from .interface import INTERFACE_MAP
-
-def load_yaml(path):
-    with open(path, 'r') as f:
-        dat = yaml.load(f)
-    return dat
+from g1_deploy.utils import load_yaml
 
 class Node:
     def __init__(self, conf_path):
@@ -207,7 +203,7 @@ class UnitreeRemoteController:
         ly_offset = 20
         self.Ly = struct.unpack('<f', data[ly_offset:ly_offset + 4])[0]
 
-    def parse(self,remoteData):
+    def parse(self, remoteData):
         self.parse_stick(remoteData)
         self.parse_button((remoteData[2],remoteData[3]))
 

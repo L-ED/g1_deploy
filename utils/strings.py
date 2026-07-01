@@ -1,4 +1,5 @@
 import re
+import yaml
 from typing import Any, Sequence
 
 unitree_joint_names = [
@@ -227,3 +228,7 @@ def resolve_matching_names(
     # return
     return index_list, names_list
 
+def load_yaml(path):
+    with open(path, 'r') as f:
+        dat = yaml.load(f)
+    return dat
