@@ -35,14 +35,14 @@ class CDDSInterface:
         self.updated = False
         self.state = State()
         self.wireless_remote = None
-
+        self.active = False
 
     def send_command(self, cmd_dict):
         for i in range(self.unitree_index):
             idx = self.unitree_index[i]
             self.low_cmd.mode_pr = self.motor_mode_pr
             self.low_cmd.mode_machine = self.mode_machine_
-            self.low_cmd.motor_cmd[i].mode =  1 # 1:Enable, 0:Disable
+            self.low_cmd.motor_cmd[i].mode =  1*self.active # 1:Enable, 0:Disable
             self.low_cmd.motor_cmd[i].q = cmd_dict['q'][idx] 
             self.low_cmd.motor_cmd[i].dq = cmd_dict['dq'][idx]
             self.low_cmd.motor_cmd[i].kp = cmd_dict['kp'][idx] 
@@ -77,3 +77,9 @@ class CDDSInterface:
         # get proprioception from simulator
         self.sim_base_position = np.array(msg.position)  # world frame
         self.sim_base_lin_vel = np.array(msg.velocity)  # base frame
+
+    def dump(self):
+        self.active = False
+
+    def activate(self):
+        self.active = True

@@ -23,6 +23,7 @@ class Node:
         self.robot = INTERFACE_MAP[robot_conf['con_type']](robot_conf)
         self.load_policies(policies_conf)
         self.setup_ui(robot_conf)
+        self.robot.dump()
 
     def load_policies(self, policies_conf):
         self.policies = {}
@@ -40,7 +41,8 @@ class Node:
             self.transitions[trns_key] = name
 
         self.policy, self.active_policy_funcs = self.policies['zero']
-        self.active_policy_name = "zero"
+        self.active_policy_name = None
+        self.active_policy_funcs = None
 
     def set_policy(self, name):
         if self.active_policy_name == name:
@@ -96,6 +98,16 @@ class Node:
             if hotkey == self.controller.active_butns_list:
                 return value
         return None
+
+    def prepare_hook(self):
+        if self.active_policy_name is not None:
+            self.robot.activate()
+
+    def dump(self):
+        self.robot.dump()
+        self.active_policy_name=None
+        self.active_policy_funcs = None
+
 
     def process_user_input(self):
         if self.use_joystick:
