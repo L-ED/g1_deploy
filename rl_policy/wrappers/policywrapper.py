@@ -27,22 +27,71 @@ class ActionManager:
     def scale_and_add(self, raw_act, default_joint_pos):
         return raw_act*self.act_scale + default_joint_pos
 
+def interpolate(s, e, num):
+    delta = (e-s)/num
+    return np.array([
+        s + delta*i for i in range(num)
+    ])
 
-
-
-
-class PolicyWrapper:
-
-    def __init__(self, policy_dir_path, robot, device='cpu'):
-        policy_path = os.path.join(policy_dir_path, 'policy.onnx')
-        config_path = os.path.join(policy_dir_path, 'config.yaml')
-        self.device = device
+class WrapperBase:
+    def __init__(self, policy_dir_path, robot, device=None):
         self.robot = robot
+        self.device = device
+        config_path = os.path.join(policy_dir_path, 'config.yaml')
+        policy_path = os.path.join(policy_dir_path, 'policy.onnx')
         self.parse_config(config_path)
-        self.setup_policy(policy_path)
+        if os.path.exists(policy_path):
+            self.setup_policy(policy_path)
+
+    def parse_config(self):
+        pass
+    
+    def setup_policy(self, policy_path):
+        # load onnx policy
+        self.onnx_policy_session = onnxruntime.InferenceSession(policy_path)
+        self.onnx_input_name = self.onnx_policy_session.get_inputs()[0].name
+        self.onnx_output_name = self.onnx_policy_session.get_outputs()[0].name
+        def policy_act(obs):
+            return self.onnx_policy_session.run(
+                [self.onnx_output_name], {self.onnx_input_name: obs})[0]
+        self.policy = policy_act    
+
+class Zero(WrapperBase):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.command_set = False
+        self.idx=0
+
+    def resample_command(self):
+        self.commands = interpolate(
+            self.robot.state['joint_pos'], 
+            self.standing_pose, 3*50)
+        self.command_set = True
+
+    def __call__(self):
+        super().__call__()
+        if not self.command_set:
+            self.resample_command()
+        q =self.commands[self.idx]
+        self.idx = min(self.idx+1, len(self.commands)-1)
+        placeholder = np.zeros_like(q)
+        return {
+            'q': q,
+            'dq': placeholder,
+            'tau': placeholder,
+            'kp': self.stiffness,
+            'kd': self.damping
+        }
+    
+    def reset(self):
+        self.command_set = False
+        self.idx = 0
+
+class PolicyWrapper(WrapperBase):
 
     def parse_config(self, config_path):
-        self.cfg = self.load_yaml_conf(config_path)
+        self.cfg = load_yaml_conf(config_path)
         self.joint_order = self.cfg["joint_order"]
         self.num_dof = len(self.joint_order)
         self.default_dof_angles = self.to_tensor(
@@ -51,7 +100,6 @@ class PolicyWrapper:
         self.action_manager = ActionManager(self, self.cfg['control'])
         self.obs_manager = ObsManager(self, self.cfg['observations'])
         self.command_manager = CommandManager(self, self.cfg['command']) # change to CommandManager later
-        self.prev_action = np.zeros(len(self.joint_order))
         self.setup_observations()
         self.reset_callbacks = []
         self.update_callbacks = []
@@ -64,15 +112,6 @@ class PolicyWrapper:
             [cfg_dict[name] for name in order],
             dtype=dtype)
 
-    def setup_policy(self, policy_path):
-        # load onnx policy
-        logger.info(f"Loading onnx policy from {policy_path}")
-        self.onnx_policy_session = onnxruntime.InferenceSession(policy_path)
-        self.onnx_input_name = self.onnx_policy_session.get_inputs()[0].name
-        self.onnx_output_name = self.onnx_policy_session.get_outputs()[0].name
-        def policy_act(obs):
-            return self.onnx_policy_session.run([self.onnx_output_name], {self.onnx_input_name: obs})[0]
-        self.policy = policy_act
 
     def reset(self):
         for reset_callback in self.reset_callbacks:
@@ -102,27 +141,6 @@ class PolicyWrapper:
     
     def set_next_trajectory(self):
         pass
-
-    def dump(self):
-        self.robot.dump()
-
-    def activate(self):
-        self.robot.activate()
-        self.
-        if isinstance(self.command_manager, MotionCommand):
-            commands = interpolate(
-                self.robot.state['joint_pos'], 
-                self.motion_manager['motion'].joint_pos, 
-                3*50
-            )
-        else:
-            commands = interpolate(self.robot.state['joint_pos'], self.standing_pose, 3*50)
-
-def interpolate(s, e, num):
-    delta = (e-s)/num
-    return np.array([
-        s + delta*i for i in range(num)
-    ])
 
 class MotionTopic:
     def __init__(self, topic_name):
