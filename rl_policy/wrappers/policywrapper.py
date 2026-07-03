@@ -22,6 +22,8 @@ class ActionManager:
             control_cfg['pos_limit_low'], env.joint_order)
         self.pos_lim_h = env.to_tensor(
             control_cfg['pos_limit_high'], env.joint_order)
+        
+        self/
 
     def pos_clip(self, pos_val: np.ndarray):
         return np.clip(pos_val, self.pos_lim_l, self.pos_lim_h)
@@ -93,7 +95,7 @@ class Zero(WrapperBase):
 class PolicyWrapper(WrapperBase):
 
     def parse_config(self, config_path):
-        self.cfg = load_yaml_conf(config_path)
+        self.cfg = load_yaml(config_path)
         self.joint_order = self.cfg["joint_order"]
         self.num_dof = len(self.joint_order)
         self.default_dof_angles = self.to_tensor(
@@ -131,7 +133,13 @@ class PolicyWrapper(WrapperBase):
         return action
     
     def process_action(self, raw_act):
-        q =self.action_manager.scale_and_add(raw_act, self.default_dof_angles)
+        if getattr(self.cfg['control'], 'residual'):
+            q =self.action_manager.scale_and_add(
+                raw_act, self.command_manager['motion'].joint_pos)
+        else:
+            q =self.action_manager.scale_and_add(
+                raw_act, self.default_dof_angles)
+
         placeholder = np.zeros_like(q)
         return {
             'q': q,

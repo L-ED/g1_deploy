@@ -26,13 +26,15 @@ class Node:
         self.transitions = {}
         for name, policy_conf in policies_conf:
             policy = get_policy_wrappper(policy_conf['path'], self.robot)
-            self.policies[name] = (
-                policy,
-                {
-                    frozenset(hotkey): getattr(policy, func_name)
-                    for hotkey, func_name in policy_conf["func_binds"] 
-                }
-            )
+            pol_funcs = {}
+            for hotkey, func_name in policy_conf["func_binds"]:
+                src = policy if hasattr(policy, func_name) else self
+                func = getattr(src, func_name) 
+                if func is None:
+                    raise ValueError(f"no func {func_name}")
+                pol_funcs[frozenset(hotkey)].append()
+
+            self.policies[name] = (policy, pol_funcs)                
             trns_key = frozenset(policy_conf['policy_transition_hotkey'])
             self.transitions[trns_key] = name
 
